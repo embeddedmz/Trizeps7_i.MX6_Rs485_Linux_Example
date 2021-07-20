@@ -46,8 +46,8 @@ struct Rs485SerialPort::Internals
     struct termios OldTios;
 
     Rs485SerialPort::RTSMode RTSMode = Rs485SerialPort::RTSMode::None;
-    int RTSSoftwareDelay = 0;
-    int oneByteTime = 0;
+    uint32_t RTSSoftwareDelay = 0;
+    uint32_t oneByteTime = 0;
     
     int Fd = -1;
 
@@ -484,7 +484,7 @@ bool Rs485SerialPort::setRtsMode(const Rs485SerialPort::RTSMode rtsMode)
     {
         if (m_Internals->Debug)
         {
-            fprintf(stderr, "Rs485SerialPort::open has not been opened !\n");
+            fprintf(stderr, "Open a serial port before changing RTS mode !\n");
         }
         return false;
     }
@@ -496,8 +496,16 @@ bool Rs485SerialPort::setRtsMode(const Rs485SerialPort::RTSMode rtsMode)
         /* Set the RTS bit in order to not reserve the RS485 bus */
         ioctlRTS(m_Internals->Fd, m_Internals->RTSMode != RTSMode::SwUp);
 
-        // TODO : Make sure Hardware up/down is disabled !
+        // Make sure Hardware up/down is disabled !
+        struct serial_rs485 rs485conf;
+        if (ioctl(m_Internals->Fd, TIOCGRS485, &rs485conf) >= 0)
+        {
+            rs485conf.flags &= ~(SER_RS485_RTS_ON_SEND);
+            rs485conf.flags &= ~(SER_RS485_RTS_AFTER_SEND);
+            //rs485conf.flags &= ~(SER_RS485_RX_DURING_TX);
 
+            ioctl(m_Internals->Fd, TIOCSRS485, &rs485conf);
+        }
 
         return true;
     }
@@ -553,17 +561,13 @@ bool Rs485SerialPort::setRtsMode(const Rs485SerialPort::RTSMode rtsMode)
              * Enable receiver during sending, required for i.MX devices */
             rs485conf.flags |= SER_RS485_RX_DURING_TX;
 
-            /* TODO - Set rts delay before send, if needed: */
-            //rs485conf.delay_rts_before_send = ...;
-
-            /* TODO - Set rts delay after send, if needed: */
-            //rs485conf.delay_rts_after_send = ...;
-
             if (ioctl(m_Internals->Fd, TIOCSRS485, &rs485conf) < 0)
             {
                 // Add debug stuff/Error handling. See errno.
                 return false;
             }
+
+            m_Internals->RTSMode = rtsMode;
 
             return true;
         }
@@ -572,9 +576,19 @@ bool Rs485SerialPort::setRtsMode(const Rs485SerialPort::RTSMode rtsMode)
     return false;
 }
 
+Rs485SerialPort::RTSMode Rs485SerialPort::getRtsMode()
+{
+    m_Internals->RTSMode;
+}
+
 void Rs485SerialPort::setDebug(const bool enable)
 {
     m_Internals->Debug = enable;
+}
+
+bool Rs485SerialPort::getDebug()
+{
+    return m_Internals->Debug;
 }
 
 ssize_t Rs485SerialPort::send(const uint8_t* pData, const size_t uSize)
@@ -582,12 +596,11 @@ ssize_t Rs485SerialPort::send(const uint8_t* pData, const size_t uSize)
     if (!pData || !uSize)
         return 0;
 
-    if (m_Internals->RTSMode != RTSMode::None && m_Internals->RTSMode != RTSMode::HwUp
-        && m_Internals->RTSMode != RTSMode::HwDown)
+    if (m_Internals->RTSMode == RTSMode::SwUp || m_Internals->RTSMode == RTSMode::SwDown)
     {
         if (m_Internals->Debug)
         {
-            fprintf(stderr, "Sending request using RTS signal\n");
+            fprintf(stderr, "Sending request using RTS software generated signal\n");
         }
 
         ioctlRTS(m_Internals->Fd, m_Internals->RTSMode == RTSMode::SwUp);
@@ -716,12 +729,81 @@ ssize_t Rs485SerialPort::receive(uint8_t* pData, const int uSize)
     return msg_length;
 }
 
-void Rs485SerialPort::setRcvTimeout(uint32_t msecTimeout)
+void Rs485SerialPort::setRcvTimeout(const uint32_t msecTimeout)
 {
     m_Internals->RcvTimeoutMs = msecTimeout;
 }
 
-void Rs485SerialPort::setRTSSoftwareDelay(uint32_t msecTimeout)
+uint32_t Rs485SerialPort::getRcvTimeout()
+{
+    return m_Internals->RcvTimeoutMs;
+}
+
+void Rs485SerialPort::setRTSSoftwareDelay(const uint32_t msecTimeout)
 {
     m_Internals->RTSSoftwareDelay = msecTimeout * 1000;
+}
+
+uint32_t Rs485SerialPort::getRTSSoftwareDelay()
+{
+    return m_Internals->RTSSoftwareDelay;
+}
+
+bool Rs485SerialPort::setRTSHardwareDelayBeforeSend(const uint32_t msecTimeout)
+{
+    struct serial_rs485 rs485conf;
+    if (ioctl(m_Internals->Fd, TIOCGRS485, &rs485conf) < 0)
+    {
+        // Add debug stuff
+        return false;
+    }
+
+    rs485conf.delay_rts_before_send = msecTimeout;
+
+    if (ioctl(m_Internals->Fd, TIOCSRS485, &rs485conf) < 0)
+    {
+        // Add debug stuff/Error handling. See errno.
+        return false;
+    }
+
+    return true;
+}
+
+bool Rs485SerialPort::setRTSHardwareDelayAfterSend(const uint32_t msecTimeout)
+{
+    struct serial_rs485 rs485conf;
+    if (ioctl(m_Internals->Fd, TIOCGRS485, &rs485conf) < 0)
+    {
+        return false;
+    }
+
+    rs485conf.delay_rts_after_send = msecTimeout;
+
+    if (ioctl(m_Internals->Fd, TIOCSRS485, &rs485conf) < 0)
+    {
+        // Add debug stuff/Error handling. See errno.
+        return false;
+    }
+
+    return true;
+}
+
+uint32_t Rs485SerialPort::getRTSHardwareDelayBeforeSend()
+{
+    struct serial_rs485 rs485conf;
+    if (ioctl(m_Internals->Fd, TIOCGRS485, &rs485conf) < 0)
+    {
+        return 0;
+    }
+    return rs485conf.delay_rts_before_send;
+}
+
+uint32_t Rs485SerialPort::getRTSHardwareDelayAfterSend()
+{
+    struct serial_rs485 rs485conf;
+    if (ioctl(m_Internals->Fd, TIOCGRS485, &rs485conf) < 0)
+    {
+        return 0;
+    }
+    return rs485conf.delay_rts_after_send;
 }

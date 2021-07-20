@@ -1,4 +1,5 @@
-﻿#include <algorithm>
+﻿//#include <algorithm>
+#include <cassert>
 #include <cstdio>
 #include <cstring>
 
@@ -18,7 +19,10 @@ int main()
     if (sport.open("/dev/ttymxc0", 57600, 'N', 8, 1))
     {
         sport.setRtsMode(Rs485SerialPort::RTSMode::HwUp);
-        sport.setRTSSoftwareDelay(0);
+        bool test = sport.setRTSHardwareDelayBeforeSend(0);
+        assert(test == true);
+        test = sport.setRTSHardwareDelayAfterSend(0);
+        assert(test == true);
 
         uint8_t m6pAddrByte = 0x00;
         uint8_t analogReqByte = 0x0F;
@@ -34,30 +38,30 @@ int main()
         req[18] = checksum & 0xff;
 
         int i = 0;
-        while (i++ < 500)
+        while (i++ < 10)
         {
             ssize_t ret = sport.send(req, 19);
             uint8_t resp[19] = { 0 };
-            std::generate(resp, resp + 19, [] { return (std::rand() % 256); });
+            //std::generate(resp, resp + 19, [] { return (std::rand() % 256); });
 
             ret = sport.receive(resp, 19);
 
             if (resp[3] != 19)
             {
-                printf("NOK\n");
+                printf("BCOUNT NOK\n");
             }
             else
             {
-                printf("OK\n");
+                printf("BCOUNT OK\n");
             }
 
             if (resp[0] != 0x24)
             {
-                printf("NOK\n");
+                printf("$      NOK\n");
             }
             else
             {
-                printf("OK\n");
+                printf("$      OK\n");
             }
 
             ushort checksumRes = (ushort)(resp[18] + (resp[17] << 8));
@@ -69,11 +73,11 @@ int main()
 
             if (checksumRes == checksumExp)
             {
-                printf("OK\n");
+                printf("CHKSUM OK\n");
             }
             else
             {
-                printf("NOK\n");
+                printf("CHKSUM NOK\n");
             }
             usleep(500000);
         }
@@ -85,7 +89,7 @@ int main()
     sport.setRcvTimeout(10000);
     if (sport.open("/dev/ttymxc0", 57600, 'N', 8, 1))
     {
-        sport.setRtsMode(Rs485SerialPort::RTSMode::Down);
+        sport.setRtsMode(Rs485SerialPort::RTSMode::HwUp);
         
         ssize_t ret = sport.send(reinterpret_cast<const uint8_t*>("Hello Amine !"), strlen("Hello Amine !"));
         printf("Sent '%zd' to Amine's computer ! (expected: '%zu').\n", ret, strlen("Hello Amine !"));

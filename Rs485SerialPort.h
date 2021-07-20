@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-class Rs485SerialPort
+class Rs485SerialPort final
 {
 public:
     enum RTSMode
@@ -25,15 +25,25 @@ public:
     void close();
 
     bool setRtsMode(const RTSMode rtsMode);
+    RTSMode getRtsMode();
     void setDebug(const bool enable);
+    bool getDebug();
 
     ssize_t send(const uint8_t* pData, const size_t uSize);
     ssize_t send(const std::string& strData);
     ssize_t send(const std::vector<uint8_t>& Data);
     ssize_t receive(uint8_t* pData, const int uSize);
 
-    void setRcvTimeout(uint32_t msecTimeout);
-    void setRTSSoftwareDelay(uint32_t msecTimeout);
+    void setRcvTimeout(const uint32_t msecTimeout);
+    uint32_t getRcvTimeout();
+
+    void setRTSSoftwareDelay(const uint32_t msecTimeout);
+    uint32_t getRTSSoftwareDelay();
+
+    bool setRTSHardwareDelayBeforeSend(const uint32_t msecTimeout);
+    bool setRTSHardwareDelayAfterSend(const uint32_t msecTimeout);
+    uint32_t getRTSHardwareDelayBeforeSend();
+    uint32_t getRTSHardwareDelayAfterSend();
 
 private:
     struct Internals;
