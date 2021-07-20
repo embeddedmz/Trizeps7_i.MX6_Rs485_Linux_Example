@@ -538,6 +538,8 @@ bool Rs485SerialPort::setRtsMode(const Rs485SerialPort::RTSMode rtsMode)
                 return false;
             }
 
+            m_Internals->RTSMode = rtsMode;
+
             return true;
         }
         else if (rtsMode == RTSMode::HwDown)
